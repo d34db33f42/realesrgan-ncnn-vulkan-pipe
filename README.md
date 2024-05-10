@@ -1,3 +1,5 @@
+Fork of Real-ESRGAN ncnn Vulkan with the goal to use pipelines with ffmpeg, simplying the upscaling process and avoiding unecessary disk usage by storing images.
+
 # Real-ESRGAN ncnn Vulkan
 
 ![CI](https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/workflows/CI/badge.svg)
