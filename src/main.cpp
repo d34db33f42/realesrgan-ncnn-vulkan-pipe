@@ -8,11 +8,6 @@
 #include <filesystem>
 namespace fs = std::filesystem;
 
-
-#if _WIN32
-// image decoder and encoder with wic
-#include "wic_image.h"
-#else // _WIN32
 // image decoder and encoder with stb
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_NO_PSD
@@ -24,54 +19,7 @@ namespace fs = std::filesystem;
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-#endif // _WIN32
 
-#if _WIN32
-#include <wchar.h>
-static wchar_t* optarg = NULL;
-static int optind = 1;
-static wchar_t getopt(int argc, wchar_t* const argv[], const wchar_t* optstring)
-{
-    if (optind >= argc || argv[optind][0] != L'-')
-        return -1;
-
-    wchar_t opt = argv[optind][1];
-    const wchar_t* p = wcschr(optstring, opt);
-    if (p == NULL)
-        return L'?';
-
-    optarg = NULL;
-
-    if (p[1] == L':')
-    {
-        optind++;
-        if (optind >= argc)
-            return L'?';
-
-        optarg = argv[optind];
-    }
-
-    optind++;
-
-    return opt;
-}
-
-static std::vector<int> parse_optarg_int_array(const wchar_t* optarg)
-{
-    std::vector<int> array;
-    array.push_back(_wtoi(optarg));
-
-    const wchar_t* p = wcschr(optarg, L',');
-    while (p)
-    {
-        p++;
-        array.push_back(_wtoi(p));
-        p = wcschr(p, L',');
-    }
-
-    return array;
-}
-#else // _WIN32
 #include <unistd.h> // getopt()
 
 static std::vector<int> parse_optarg_int_array(const char* optarg)
@@ -89,7 +37,6 @@ static std::vector<int> parse_optarg_int_array(const char* optarg)
 
     return array;
 }
-#endif // _WIN32
 
 // ncnn
 #include "cpu.h"
@@ -204,11 +151,8 @@ void* load(void* args)
         int h;
         int c;
 
-#if _WIN32
-        FILE* fp = _wfopen(imagepath.c_str(), L"rb");
-#else
         FILE* fp = fopen(imagepath.c_str(), "rb");
-#endif
+
         if (fp)
         {
             // read whole file
@@ -228,10 +172,6 @@ void* load(void* args)
 
             if (filedata)
             {
-                // try jpg png etc.
-#if _WIN32
-                pixeldata = wic_decode_image(imagepath.c_str(), &w, &h, &c);
-#else // _WIN32
                 pixeldata = stbi_load_from_memory(filedata, length, &w, &h, &c, 0);
                 if (pixeldata)
                 {
@@ -251,7 +191,6 @@ void* load(void* args)
                         c = 4;
                     }
                 }
-#endif // _WIN32
                 free(filedata);
             }
         }
@@ -270,22 +209,15 @@ void* load(void* args)
             {
                 path_t output_filename2 = ltp->output_files[i] + PATHSTR(".png");
                 v.outpath = output_filename2;
-#if _WIN32
-                fwprintf(stderr, L"image %ls has alpha channel ! %ls will output %ls\n", imagepath.c_str(), imagepath.c_str(), output_filename2.c_str());
-#else // _WIN32
+
                 fprintf(stderr, "image %s has alpha channel ! %s will output %s\n", imagepath.c_str(), imagepath.c_str(), output_filename2.c_str());
-#endif // _WIN32
             }
 
             toproc.put(v);
         }
         else
         {
-#if _WIN32
-            fwprintf(stderr, L"decode image %ls failed\n", imagepath.c_str());
-#else // _WIN32
             fprintf(stderr, "decode image %s failed\n", imagepath.c_str());
-#endif // _WIN32
         }
     }
 
@@ -343,11 +275,8 @@ void* save(void* args)
         // free input pixel data
         {
             unsigned char* pixeldata = (unsigned char*)v.inimage.data;
-#if _WIN32
-            free(pixeldata);
-#else
+
             stbi_image_free(pixeldata);
-#endif
         }
 
         int success = 0;
@@ -364,50 +293,29 @@ void* save(void* args)
 
         if (ext == PATHSTR("png") || ext == PATHSTR("PNG"))
         {
-#if _WIN32
-            success = wic_encode_image(v.outpath.c_str(), v.outimage.w, v.outimage.h, v.outimage.elempack, v.outimage.data);
-#else
             success = stbi_write_png(v.outpath.c_str(), v.outimage.w, v.outimage.h, v.outimage.elempack, v.outimage.data, 0);
-#endif
         }
         else if (ext == PATHSTR("jpg") || ext == PATHSTR("JPG") || ext == PATHSTR("jpeg") || ext == PATHSTR("JPEG"))
         {
-#if _WIN32
-            success = wic_encode_jpeg_image(v.outpath.c_str(), v.outimage.w, v.outimage.h, v.outimage.elempack, v.outimage.data);
-#else
             success = stbi_write_jpg(v.outpath.c_str(), v.outimage.w, v.outimage.h, v.outimage.elempack, v.outimage.data, 100);
-#endif
         }
         if (success)
         {
             if (verbose)
             {
-#if _WIN32
-                fwprintf(stderr, L"%ls -> %ls done\n", v.inpath.c_str(), v.outpath.c_str());
-#else
                 fprintf(stderr, "%s -> %s done\n", v.inpath.c_str(), v.outpath.c_str());
-#endif
             }
         }
         else
         {
-#if _WIN32
-            fwprintf(stderr, L"encode image %ls failed\n", v.outpath.c_str());
-#else
             fprintf(stderr, "encode image %s failed\n", v.outpath.c_str());
-#endif
         }
     }
 
     return 0;
 }
 
-
-#if _WIN32
-int wmain(int argc, wchar_t** argv)
-#else
 int main(int argc, char** argv)
-#endif
 {
     path_t inputpath;
     path_t outputpath;
@@ -423,54 +331,6 @@ int main(int argc, char** argv)
     int tta_mode = 0;
     path_t format = PATHSTR("png");
 
-#if _WIN32
-    setlocale(LC_ALL, "");
-    wchar_t opt;
-    while ((opt = getopt(argc, argv, L"i:o:s:t:m:n:g:j:f:vxh")) != (wchar_t)-1)
-    {
-        switch (opt)
-        {
-        case L'i':
-            inputpath = optarg;
-            break;
-        case L'o':
-            outputpath = optarg;
-            break;
-        case L's':
-            scale = _wtoi(optarg);
-            break;
-        case L't':
-            tilesize = parse_optarg_int_array(optarg);
-            break;
-        case L'm':
-            model = optarg;
-            break;
-        case L'n':
-            modelname = optarg;
-            break;
-        case L'g':
-            gpuid = parse_optarg_int_array(optarg);
-            break;
-        case L'j':
-            swscanf(optarg, L"%d:%*[^:]:%d", &jobs_load, &jobs_save);
-            jobs_proc = parse_optarg_int_array(wcschr(optarg, L':') + 1);
-            break;
-        case L'f':
-            format = optarg;
-            break;
-        case L'v':
-            verbose = 1;
-            break;
-        case L'x':
-            tta_mode = 1;
-            break;
-        case L'h':
-        default:
-            print_usage();
-            return -1;
-        }
-    }
-#else // _WIN32
     int opt;
     while ((opt = getopt(argc, argv, "i:o:s:t:m:n:g:j:f:vxh")) != -1)
     {
@@ -516,7 +376,6 @@ int main(int argc, char** argv)
             return -1;
         }
     }
-#endif // _WIN32
 
     if (inputpath.empty() || outputpath.empty())
     {
@@ -613,11 +472,8 @@ int main(int argc, char** argv)
                 if (filename_noext == last_filename_noext)
                 {
                     path_t output_filename2 = filename + PATHSTR('.') + format;
-#if _WIN32
-                    fwprintf(stderr, L"both %ls and %ls output %ls ! %ls will output %ls\n", filename.c_str(), last_filename.c_str(), output_filename.c_str(), filename.c_str(), output_filename2.c_str());
-#else
+
                     fprintf(stderr, "both %s and %s output %s ! %s will output %s\n", filename.c_str(), last_filename.c_str(), output_filename.c_str(), filename.c_str(), output_filename2.c_str());
-#endif
                     output_filename = output_filename2;
                 }
                 else
@@ -665,21 +521,6 @@ int main(int argc, char** argv)
     //     return -1;
     // }
 
-#if _WIN32
-    wchar_t parampath[256];
-    wchar_t modelpath[256];
-
-    if (modelname == PATHSTR("realesr-animevideov3"))
-    {
-        swprintf(parampath, 256, L"%s/%s-x%s.param", model.c_str(), modelname.c_str(), std::to_string(scale));
-        swprintf(modelpath, 256, L"%s/%s-x%s.bin", model.c_str(), modelname.c_str(), std::to_string(scale));
-    }
-    else{
-        swprintf(parampath, 256, L"%s/%s.param", model.c_str(), modelname.c_str());
-        swprintf(modelpath, 256, L"%s/%s.bin", model.c_str(), modelname.c_str());
-    }
-
-#else
     char parampath[256];
     char modelpath[256];
 
@@ -692,14 +533,9 @@ int main(int argc, char** argv)
         sprintf(parampath, "%s/%s.param", model.c_str(), modelname.c_str());
         sprintf(modelpath, "%s/%s.bin", model.c_str(), modelname.c_str());
     }
-#endif
 
     path_t paramfullpath = sanitize_filepath(parampath);
     path_t modelfullpath = sanitize_filepath(modelpath);
-
-#if _WIN32
-    CoInitializeEx(NULL, COINIT_MULTITHREADED);
-#endif
 
     ncnn::create_gpu_instance();
 

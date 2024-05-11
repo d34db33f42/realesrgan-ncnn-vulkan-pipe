@@ -67,48 +67,17 @@ RealESRGAN::~RealESRGAN()
     delete bicubic;
 }
 
-#if _WIN32
-int RealESRGAN::load(const std::wstring& parampath, const std::wstring& modelpath)
-#else
 int RealESRGAN::load(const std::string& parampath, const std::string& modelpath)
-#endif
 {
-#if _WIN32
-    {
-        FILE* fp = _wfopen(parampath.c_str(), L"rb");
-        if (!fp)
-        {
-            fwprintf(stderr, L"_wfopen %ls failed\n", parampath.c_str());
-        }
 
-        net.load_param(fp);
-
-        fclose(fp);
-    }
-    {
-        FILE* fp = _wfopen(modelpath.c_str(), L"rb");
-        if (!fp)
-        {
-            fwprintf(stderr, L"_wfopen %ls failed\n", modelpath.c_str());
-        }
-
-        net.load_model(fp);
-
-        fclose(fp);
-    }
-#else
     net.load_param(parampath.c_str());
     net.load_model(modelpath.c_str());
-#endif
 
     // initialize preprocess and postprocess pipeline
     {
         std::vector<ncnn::vk_specialization_type> specializations(1);
-#if _WIN32
-        specializations[0].i = 1;
-#else
+
         specializations[0].i = 0;
-#endif
 
         realesrgan_preproc = new ncnn::Pipeline(net.vulkan_device());
         realesrgan_preproc->set_optimal_local_size_xyz(32, 32, 3);
@@ -222,19 +191,11 @@ int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
         {
             if (channels == 3)
             {
-#if _WIN32
-                in = ncnn::Mat::from_pixels(pixeldata + in_tile_y0 * w * channels, ncnn::Mat::PIXEL_BGR2RGB, w, (in_tile_y1 - in_tile_y0));
-#else
                 in = ncnn::Mat::from_pixels(pixeldata + in_tile_y0 * w * channels, ncnn::Mat::PIXEL_RGB, w, (in_tile_y1 - in_tile_y0));
-#endif
             }
             if (channels == 4)
             {
-#if _WIN32
-                in = ncnn::Mat::from_pixels(pixeldata + in_tile_y0 * w * channels, ncnn::Mat::PIXEL_BGRA2RGBA, w, (in_tile_y1 - in_tile_y0));
-#else
                 in = ncnn::Mat::from_pixels(pixeldata + in_tile_y0 * w * channels, ncnn::Mat::PIXEL_RGBA, w, (in_tile_y1 - in_tile_y0));
-#endif
             }
         }
 
@@ -531,19 +492,11 @@ int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
             {
                 if (channels == 3)
                 {
-#if _WIN32
-                    out.to_pixels((unsigned char*)outimage.data + yi * scale * TILE_SIZE_Y * w * scale * channels, ncnn::Mat::PIXEL_RGB2BGR);
-#else
                     out.to_pixels((unsigned char*)outimage.data + yi * scale * TILE_SIZE_Y * w * scale * channels, ncnn::Mat::PIXEL_RGB);
-#endif
                 }
                 if (channels == 4)
                 {
-#if _WIN32
-                    out.to_pixels((unsigned char*)outimage.data + yi * scale * TILE_SIZE_Y * w * scale * channels, ncnn::Mat::PIXEL_RGBA2BGRA);
-#else
                     out.to_pixels((unsigned char*)outimage.data + yi * scale * TILE_SIZE_Y * w * scale * channels, ncnn::Mat::PIXEL_RGBA);
-#endif
                 }
             }
         }
