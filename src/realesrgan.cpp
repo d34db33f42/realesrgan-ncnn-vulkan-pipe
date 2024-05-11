@@ -43,7 +43,7 @@ static const uint32_t realesrgan_postproc_tta_int8s_spv_data[] = {
     #include "realesrgan_postproc_tta_int8s.spv.hex.h"
 };
 
-RealESRGAN::RealESRGAN(int gpuid, bool _tta_mode)
+RealESRGAN::RealESRGAN(int gpuid, bool _tta_mode) : tta_mode(_tta_mode)
 {
     net.opt.use_vulkan_compute = true;
     net.opt.use_fp16_packed = true;
@@ -53,13 +53,6 @@ RealESRGAN::RealESRGAN(int gpuid, bool _tta_mode)
     net.opt.use_int8_arithmetic = false;
 
     net.set_vulkan_device(gpuid);
-
-    realesrgan_preproc = 0;
-    realesrgan_postproc = 0;
-    bicubic_2x = 0;
-    bicubic_3x = 0;
-    bicubic_4x = 0;
-    tta_mode = _tta_mode;
 }
 
 RealESRGAN::~RealESRGAN()
@@ -70,14 +63,8 @@ RealESRGAN::~RealESRGAN()
         delete realesrgan_postproc;
     }
 
-    bicubic_2x->destroy_pipeline(net.opt);
-    delete bicubic_2x;
-
-    bicubic_3x->destroy_pipeline(net.opt);
-    delete bicubic_3x;
-
-    bicubic_4x->destroy_pipeline(net.opt);
-    delete bicubic_4x;
+    bicubic->destroy_pipeline(net.opt);
+    delete bicubic;
 }
 
 #if _WIN32
@@ -165,40 +152,30 @@ int RealESRGAN::load(const std::string& parampath, const std::string& modelpath)
 
     // bicubic 2x/3x/4x for alpha channel
     {
-        bicubic_2x = ncnn::create_layer("Interp");
-        bicubic_2x->vkdev = net.vulkan_device();
+        bicubic = ncnn::create_layer("Interp");
+        bicubic->vkdev = net.vulkan_device();
 
         ncnn::ParamDict pd;
         pd.set(0, 3);// bicubic
-        pd.set(1, 2.f);
-        pd.set(2, 2.f);
-        bicubic_2x->load_param(pd);
 
-        bicubic_2x->create_pipeline(net.opt);
-    }
-    {
-        bicubic_3x = ncnn::create_layer("Interp");
-        bicubic_3x->vkdev = net.vulkan_device();
+        switch(scale) {
+        case 2:
+            pd.set(1, 2.f);
+            pd.set(2, 2.f);
+            break;
+        case 3:
+            pd.set(1, 3.f);
+            pd.set(2, 3.f);
+            break;
+        case 4:
+            pd.set(1, 4.f);
+            pd.set(2, 4.f);
+            break;
+        }
 
-        ncnn::ParamDict pd;
-        pd.set(0, 3);// bicubic
-        pd.set(1, 3.f);
-        pd.set(2, 3.f);
-        bicubic_3x->load_param(pd);
+        bicubic->load_param(pd);
 
-        bicubic_3x->create_pipeline(net.opt);
-    }
-    {
-        bicubic_4x = ncnn::create_layer("Interp");
-        bicubic_4x->vkdev = net.vulkan_device();
-
-        ncnn::ParamDict pd;
-        pd.set(0, 3);// bicubic
-        pd.set(1, 4.f);
-        pd.set(2, 4.f);
-        bicubic_4x->load_param(pd);
-
-        bicubic_4x->create_pipeline(net.opt);
+        bicubic->create_pipeline(net.opt);
     }
 
     return 0;
@@ -380,17 +357,9 @@ int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
                     {
                         out_alpha_tile_gpu = in_alpha_tile_gpu;
                     }
-                    if (scale == 2)
+                    else
                     {
-                        bicubic_2x->forward(in_alpha_tile_gpu, out_alpha_tile_gpu, cmd, opt);
-                    }
-                    if (scale == 3)
-                    {
-                        bicubic_3x->forward(in_alpha_tile_gpu, out_alpha_tile_gpu, cmd, opt);
-                    }
-                    if (scale == 4)
-                    {
-                        bicubic_4x->forward(in_alpha_tile_gpu, out_alpha_tile_gpu, cmd, opt);
+                        bicubic->forward(in_alpha_tile_gpu, out_alpha_tile_gpu, cmd, opt);
                     }
                 }
 
@@ -499,17 +468,9 @@ int RealESRGAN::process(const ncnn::Mat& inimage, ncnn::Mat& outimage) const
                     {
                         out_alpha_tile_gpu = in_alpha_tile_gpu;
                     }
-                    if (scale == 2)
+                    else
                     {
-                        bicubic_2x->forward(in_alpha_tile_gpu, out_alpha_tile_gpu, cmd, opt);
-                    }
-                    if (scale == 3)
-                    {
-                        bicubic_3x->forward(in_alpha_tile_gpu, out_alpha_tile_gpu, cmd, opt);
-                    }
-                    if (scale == 4)
-                    {
-                        bicubic_4x->forward(in_alpha_tile_gpu, out_alpha_tile_gpu, cmd, opt);
+                        bicubic->forward(in_alpha_tile_gpu, out_alpha_tile_gpu, cmd, opt);
                     }
                 }
 

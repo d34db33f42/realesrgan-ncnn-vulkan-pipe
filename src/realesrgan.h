@@ -32,11 +32,9 @@ public:
 
 private:
     ncnn::Net net;
-    ncnn::Pipeline* realesrgan_preproc;
-    ncnn::Pipeline* realesrgan_postproc;
-    ncnn::Layer* bicubic_2x;
-    ncnn::Layer* bicubic_3x;
-    ncnn::Layer* bicubic_4x;
+    ncnn::Pipeline* realesrgan_preproc = 0;
+    ncnn::Pipeline* realesrgan_postproc = 0;
+    ncnn::Layer* bicubic = 0;
     bool tta_mode;
 };
 
